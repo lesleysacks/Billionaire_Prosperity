@@ -7,7 +7,7 @@
  * fill the matching [data-contact] blocks in the HTML.
  */
 const SITE = {
-  name: "Private Transport & Tours",
+  name: "Billionaire Prosperity",
   /** International digits only. 0790235061 → 27790235061. */
   whatsapp: "27790235061",
   /** Enquiries address. Enables "Send via email" on the form. */

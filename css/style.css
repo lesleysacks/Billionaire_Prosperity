@@ -424,17 +424,13 @@ main:focus {
 
 .brand__name {
   font-family: var(--font-serif);
-  font-size: clamp(0.98rem, 3.6vw, 1.25rem);
+  font-size: clamp(0.84rem, 4vw, 1.25rem);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
-@media (min-width: 480px) {
-  .brand__name {
-    white-space: nowrap;
-  }
-}
 
 .brand__tag {
   margin-top: 0.2rem;
@@ -963,6 +959,11 @@ body.nav-open .wa-fab {
 
 .hero__title {
   max-width: 15ch;
+}
+
+.hero__title--long {
+  max-width: 18ch;
+  font-size: clamp(2.1rem, 7.4vw, 5rem);
 }
 
 .hero__intro {
@@ -2077,4 +2078,22 @@ body.nav-open .wa-fab {
 
 .contact-slot[hidden] {
   display: none !important;
+}
+
+.dest__route {
+  width: 100%;
+  max-width: 28rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.mission-vision {
+  display: grid;
+  gap: 3.5rem;
+}
+
+@media (min-width: 900px) {
+  .mission-vision {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: clamp(3rem, 7vw, 6rem);
+  }
 }

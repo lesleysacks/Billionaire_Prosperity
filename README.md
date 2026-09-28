@@ -1,6 +1,6 @@
-# Private Transport & Tours — Cape Winelands
+# Billionaire Prosperity — Private Transport & Tours, Cape Winelands
 
-Static marketing and enquiry website. Open `index.html`, or upload this folder to any static host. No Node.js, npm, or build step.
+Static marketing and enquiry website for https://billionaireprosperity.co.za (GitHub Pages, `CNAME` in the repo root). Open `index.html`, or upload this folder to any static host. No Node.js, npm, or build step.
 
 ## Pages
 
@@ -9,7 +9,7 @@ Static marketing and enquiry website. Open `index.html`, or upload this folder t
 - `wine-tours.html`
 - `fleet.html`
 - `about.html`
-- `gallery.html`
+- `gallery.html` — hidden for now: not linked from nav, footer or sitemap, and marked `noindex`. The file is kept for later.
 - `contact.html` — enquiry form (WhatsApp, email, or copy until a form endpoint is set)
 - `404.html`
 
@@ -27,10 +27,9 @@ In `js/main.js`, the `SITE` object:
 
 In the HTML, when you have them:
 
-- Business name (header, footer, titles)
 - Phone and email in the footer and on `contact.html` (commented examples are in the footer)
-- Vehicle names and specs on `index.html` and `fleet.html` (currently “To be confirmed”)
-- Production domain in each canonical URL, `robots.txt`, and `sitemap.xml` (currently `https://example.com`)
+- Vehicle luggage and “ideal for” on `index.html` and `fleet.html` (currently “To be confirmed”)
+- Cape Town tour route and activities on `wine-tours.html` (currently “To be confirmed”)
 - Logo: replace the monogram in the header, or drop a file in `assets/logo/`
 
 ## Photos
@@ -43,7 +42,7 @@ Save images at the paths shown on each placeholder. The page swaps the placehold
 | `assets/images/hero/og-default.jpg` | Social share image (1200×630), then add the `og:image` tags |
 | `assets/images/services/*.jpg` | Service cards and the services page |
 | `assets/images/fleet/*.jpg` | Fleet |
-| `assets/images/wine-tours/*.jpg` | Wine tours |
+| `assets/images/wine-tours/*.jpg` | Wine tours (`stellenbosch.jpg`, `paarl.jpg`, `cape-town-tour-map.jpg` still needed) |
 | `assets/images/about/*.jpg` | About |
 | `assets/images/gallery/gallery-01.jpg` … `gallery-09.jpg` | Gallery |
 

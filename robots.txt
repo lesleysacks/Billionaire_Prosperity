@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://example.com/sitemap.xml
+Sitemap: https://billionaireprosperity.co.za/sitemap.xml
