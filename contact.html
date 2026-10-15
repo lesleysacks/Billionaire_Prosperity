@@ -16,7 +16,10 @@
     <meta property="og:title" content="Contact &amp; Book | Billionaire Prosperity">
     <meta property="og:description" content="Enquire about airport transfers, business transport, wine tours or private tours in Cape Town and the Cape Winelands. Send an enquiry or message us on WhatsApp.">
     <meta property="og:url" content="https://billionaireprosperity.co.za/contact.html">
-    <meta name="twitter:card" content="summary">
+    <meta property="og:image" content="https://billionaireprosperity.co.za/assets/images/hero/index_image.jpg">
+    <meta property="og:image:alt" content="Private vehicle on a scenic Cape road">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://billionaireprosperity.co.za/assets/images/hero/index_image.jpg">
     <meta name="twitter:title" content="Contact &amp; Book | Billionaire Prosperity">
     <meta name="twitter:description" content="Enquire about airport transfers, business transport, wine tours or private tours in Cape Town and the Cape Winelands. Send an enquiry or message us on WhatsApp.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -93,28 +96,29 @@
         <div class="container contact__grid">
           <div class="contact__form-wrap">
             <h2 class="h3 contact__form-title">Send an enquiry</h2>
-            <p class="contact__form-intro">Fields marked <span aria-hidden="true">*</span><span class="sr-only">with an asterisk</span> are required.</p>
+            <p class="contact__form-intro">Prepare your details here, then send them yourself on WhatsApp. This page does not store the enquiry. Fields marked <span aria-hidden="true">*</span><span class="sr-only">with an asterisk</span> are required.</p>
             <noscript>
               <p class="notice">The enquiry form needs JavaScript to prepare your message. Please enable JavaScript, or contact us directly using the options on this page.</p>
             </noscript>
             <form id="enquiry-form" class="form" novalidate data-enquiry-form>
+              <p class="form__preset" data-service-preset hidden></p>
               <div class="form__summary" role="alert" data-summary hidden>Please check the highlighted fields and try again.</div>
               <div class="form__grid">
                 <div class="field">
                   <label for="f-name">Name <span class="req" aria-hidden="true">*</span></label>
-                  <input id="f-name" name="name" type="text" autocomplete="name" required minlength="2" aria-describedby="f-name-error">
-                  <p class="field__error" id="f-name-error" data-error-for="name"></p>
+                  <input id="f-name" name="name" type="text" autocomplete="name" required minlength="2" maxlength="80" aria-describedby="f-name-error">
+                  <p class="field__error" id="f-name-error" data-error-for="name" aria-live="polite"></p>
                 </div>
                 <div class="field">
                   <label for="f-phone">Phone / WhatsApp <span class="req" aria-hidden="true">*</span></label>
-                  <input id="f-phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" required aria-describedby="f-phone-hint f-phone-error">
+                  <input id="f-phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" required maxlength="20" aria-describedby="f-phone-hint f-phone-error">
                   <p class="field__hint" id="f-phone-hint">Include your country code if you're travelling from abroad.</p>
-                  <p class="field__error" id="f-phone-error" data-error-for="phone"></p>
+                  <p class="field__error" id="f-phone-error" data-error-for="phone" aria-live="polite"></p>
                 </div>
                 <div class="field">
                   <label for="f-email">Email</label>
-                  <input id="f-email" name="email" type="email" autocomplete="email" aria-describedby="f-email-error">
-                  <p class="field__error" id="f-email-error" data-error-for="email"></p>
+                  <input id="f-email" name="email" type="email" autocomplete="email" maxlength="120" aria-describedby="f-email-error">
+                  <p class="field__error" id="f-email-error" data-error-for="email" aria-live="polite"></p>
                 </div>
                 <div class="field">
                   <label for="f-service">Service <span class="req" aria-hidden="true">*</span></label>
@@ -128,29 +132,29 @@
                       <option value="other">Other</option>
                     </select>
                   </div>
-                  <p class="field__error" id="f-service-error" data-error-for="service"></p>
+                  <p class="field__error" id="f-service-error" data-error-for="service" aria-live="polite"></p>
                 </div>
                 <div class="field">
                   <label for="f-pickup">Pickup location</label>
-                  <input id="f-pickup" name="pickup" type="text" autocomplete="off" placeholder="e.g. Airport, hotel or address">
+                  <input id="f-pickup" name="pickup" type="text" autocomplete="off" maxlength="120" placeholder="e.g. Airport, hotel or address">
                 </div>
                 <div class="field">
                   <label for="f-destination">Destination</label>
-                  <input id="f-destination" name="destination" type="text" autocomplete="off" placeholder="Where are you heading?">
+                  <input id="f-destination" name="destination" type="text" autocomplete="off" maxlength="120" placeholder="Where are you heading?">
                 </div>
                 <div class="field">
                   <label for="f-date">Travel date</label>
                   <input id="f-date" name="date" type="date" aria-describedby="f-date-error">
-                  <p class="field__error" id="f-date-error" data-error-for="date"></p>
+                  <p class="field__error" id="f-date-error" data-error-for="date" aria-live="polite"></p>
                 </div>
                 <div class="field">
                   <label for="f-passengers">Passengers</label>
                   <input id="f-passengers" name="passengers" type="number" inputmode="numeric" min="1" step="1" aria-describedby="f-passengers-error">
-                  <p class="field__error" id="f-passengers-error" data-error-for="passengers"></p>
+                  <p class="field__error" id="f-passengers-error" data-error-for="passengers" aria-live="polite"></p>
                 </div>
                 <div class="field field--full">
                   <label for="f-message">Message</label>
-                  <textarea id="f-message" name="message" rows="5" placeholder="Flight details, timings, luggage or anything else we should know."></textarea>
+                  <textarea id="f-message" name="message" rows="5" maxlength="800" placeholder="Flight details, timings, luggage or anything else we should know."></textarea>
                 </div>
                 <div class="field--hp" aria-hidden="true">
                   <label for="f-company">Company</label>
@@ -159,7 +163,7 @@
               </div>
               <div class="form__footer">
                 <button class="btn form__submit" type="submit" data-submit>
-                  <span data-submit-label>Send Enquiry</span>
+                  <span data-submit-label>Prepare WhatsApp enquiry</span>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
                 </button>
                 <p class="form__privacy" data-privacy>This website doesn't store your details. We'll help you send your enquiry directly to us.</p>
@@ -200,6 +204,10 @@
                   <div><span class="direct__label">Phone</span><a href="tel:+27790235061">079 023 5061</a><a href="tel:+27621338497">062 133 8497</a></div>
                 </li>
                 <li>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2.5" y="4.5" width="19" height="15" rx="1.5"/><path d="m3 6 9 7 9-7"/></svg>
+                  <div><span class="direct__label">Email</span><a href="mailto:andremoses100.am@gmail.com">andremoses100.am@gmail.com</a></div>
+                </li>
+                <li>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H17a3.5 3.5 0 0 0 0-7H7a3.5 3.5 0 0 1 0-7h8.5"/></svg>
                   <div><span class="direct__label">Service area</span><span>Cape Town &amp; the Cape Winelands</span></div>
                 </li>
@@ -208,9 +216,9 @@
             <div class="direct">
               <h2 class="direct__title">What happens next</h2>
               <ol class="next-steps">
-                <li>Send your enquiry by form or WhatsApp.</li>
-                <li>We get back to you to confirm the details.</li>
-                <li>Your journey is arranged around your plans.</li>
+                <li>Prepare your enquiry on this page.</li>
+                <li>Send it yourself on WhatsApp or by email. Nothing is delivered until you confirm it there.</li>
+                <li>We reply to confirm the details and arrange the journey.</li>
               </ol>
             </div>
           </aside>
@@ -254,7 +262,7 @@
               
             </li>
             
-            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2.5" y="4.5" width="19" height="15" rx="1.5"/><path d="m3 6 9 7 9-7"/></svg><a href="mailto:mailto:andremoses100.am@gmail.com">andremoses100.am@gmail.com</a></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2.5" y="4.5" width="19" height="15" rx="1.5"/><path d="m3 6 9 7 9-7"/></svg><a href="mailto:andremoses100.am@gmail.com">andremoses100.am@gmail.com</a></li>
             
             <li>
               <svg class="" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M17.5 14.4c-.3-.1-1.8-.9-2-1s-.5-.1-.7.1-.8 1-1 1.2-.4.2-.7.1a8.2 8.2 0 0 1-2.4-1.5 9 9 0 0 1-1.7-2.1c-.2-.3 0-.5.1-.6l.5-.5.3-.5a.6.6 0 0 0 0-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6a1.2 1.2 0 0 0-.8.4 3.5 3.5 0 0 0-1.1 2.6 6 6 0 0 0 1.3 3.2 13.9 13.9 0 0 0 5.3 4.7c2.7 1 2.7.7 3.2.6a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.6-.3z"/><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2z"/></svg>

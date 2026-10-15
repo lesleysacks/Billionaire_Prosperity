@@ -15,22 +15,31 @@ Static marketing and enquiry website for https://billionaireprosperity.co.za (Gi
 
 Shared files: `css/style.css`, `js/main.js`, `assets/images/`, `favicon.svg`, `favicon.ico`, `robots.txt`, `sitemap.xml`.
 
-## Client details still to fill in
+## Client details still to confirm
 
-Do not invent these. Placeholders stay in place until real values arrive.
+Do not invent these. Unconfirmed fields stay neutral until the business owner supplies them.
 
 In `js/main.js`, the `SITE` object:
 
-- `whatsapp` — international digits only, e.g. `27821234567`. Until set, WhatsApp buttons go to the contact page.
-- `email` — enables “Send via email” on the enquiry form.
-- `formEndpoint` — optional Formspree, Basin, or Getform URL. Leave empty to keep the handoff.
+- `whatsapp` — `27790235061`, the international form of the published number 079 023 5061. WhatsApp links use `https://wa.me/27790235061`.
+- `email` — `andremoses100.am@gmail.com`, the address already published in the footer. It only builds a `mailto:` link. The page does not send email by itself.
+- `formEndpoint` — still empty. No enquiry is stored or delivered by the website. Leave it empty until a real form service is approved.
 
-In the HTML, when you have them:
+Still unconfirmed in the HTML:
 
-- Phone and email in the footer and on `contact.html` (commented examples are in the footer)
-- Vehicle luggage and “ideal for” on `index.html` and `fleet.html` (currently “To be confirmed”)
-- Cape Town tour route and activities on `wine-tours.html` (currently “To be confirmed”)
-- Logo: replace the monogram in the header, or drop a file in `assets/logo/`
+- Luggage and “ideal for” on every fleet card, and passenger capacity for the Chery Tiggo 4 Pro. The home page and fleet page previously disagreed (1–4 and 1–6), so that capacity now says “To be confirmed”.
+- Both Suzuki Swift cards use the consistent published capacity of 1–4 passengers. There is no Chevrolet image in the repository.
+- Cape Town tour route and activities on `wine-tours.html`.
+- Logo: the header still uses the monogram. Print files in `assets/logo/` are not wired into the pages.
+
+## Checks
+
+No install is required. From the repository root:
+
+```bash
+node --check js/main.js
+node --test tests/site.test.js
+```
 
 ## Photos
 

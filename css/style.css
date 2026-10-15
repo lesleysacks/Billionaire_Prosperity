@@ -312,6 +312,7 @@ p {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
+  min-height: 44px;
   font-size: 0.76rem;
   font-weight: 600;
   letter-spacing: 0.18em;
@@ -424,11 +425,30 @@ main:focus {
 
 .brand__name {
   font-family: var(--font-serif);
-  font-size: clamp(0.84rem, 4vw, 1.25rem);
+  font-size: clamp(0.72rem, 3.4vw, 1.25rem);
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  .site-header__inner {
+    gap: 0.65rem;
+  }
+
+  .brand {
+    gap: 0.5rem;
+  }
+
+  .brand__mark {
+    width: 30px;
+    height: 30px;
+  }
+
+  .brand__tag {
+    letter-spacing: 0.14em;
+  }
 }
 
 
@@ -678,6 +698,12 @@ main:focus {
   overflow-wrap: anywhere;
 }
 
+.site-footer__col a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
 .site-footer__col a:hover {
   color: var(--cream);
   text-decoration: underline;
@@ -737,7 +763,7 @@ main:focus {
 
 @media (min-width: 1024px) {
   .site-footer {
-    padding-bottom: 2.5rem;
+    padding-bottom: 5.5rem;
   }
 
   .site-footer__grid {
@@ -1068,9 +1094,13 @@ body.nav-open .wa-fab {
 
 .vehicle__name {
   margin-top: 0.5rem;
-  font-size: 1.8rem;
+  font-size: clamp(1.45rem, 3vw, 1.8rem);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.vehicle__body .text-link {
+  margin-top: 0.75rem;
 }
 
 .vehicle__specs {
@@ -1341,6 +1371,9 @@ body.nav-open .wa-fab {
 }
 
 .service-jump a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   padding: 0.55rem 0.95rem;
   border: 1px solid var(--line-light);
   border-radius: var(--radius);
@@ -1553,7 +1586,7 @@ body.nav-open .wa-fab {
 }
 
 .fleet-item__name {
-  font-size: clamp(2.2rem, 5.5vw, 3.4rem);
+  font-size: clamp(2rem, 4vw, 2.75rem);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -1596,6 +1629,10 @@ body.nav-open .wa-fab {
   .fleet-item {
     grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
     gap: clamp(3rem, 6vw, 5rem);
+  }
+
+  .fleet-item:not(.is-flipped) .fleet-item__copy {
+    padding-right: 9.25rem;
   }
 
   .fleet-item.is-flipped {
@@ -1714,6 +1751,20 @@ body.nav-open .wa-fab {
   color: var(--muted);
 }
 
+#enquiry-form,
+.fleet-item,
+#whatsapp {
+  scroll-margin-top: calc(var(--header-h) + 1rem);
+}
+
+.form__preset {
+  margin: -0.5rem 0 1.5rem;
+  padding: 0.85rem 1rem;
+  border-left: 3px solid var(--wine);
+  background: var(--cream);
+  font-size: 0.92rem;
+}
+
 .notice {
   margin-bottom: 1.5rem;
   padding: 1rem 1.25rem;
@@ -1797,7 +1848,7 @@ body.nav-open .wa-fab {
 
 .field input::placeholder,
 .field textarea::placeholder {
-  color: #968c80;
+  color: #6e655c;
 }
 
 .field input:hover,
@@ -1893,9 +1944,18 @@ body.nav-open .wa-fab {
   max-width: 30rem;
 }
 
-@media (max-width: 479px) {
-  .form__submit {
-    width: 100%;
+@media (max-width: 639px) {
+  .form__submit,
+  .service-row__copy .btn,
+  .cta-band__actions .btn,
+  .result .btn {
+    width: calc(100% - 4.5rem);
+  }
+
+  .service-row__copy .btn-row,
+  .cta-band__actions,
+  .result .btn-row {
+    display: grid;
   }
 }
 
@@ -1909,6 +1969,27 @@ body.nav-open .wa-fab {
 
 .result:focus {
   outline: none;
+}
+
+.result:focus-visible {
+  outline: 2px solid var(--wine-soft);
+  outline-offset: 4px;
+}
+
+.result.is-handoff .result__icon {
+  background: transparent;
+  color: var(--wine);
+  border: 1px solid var(--wine);
+}
+
+.result.is-handoff .result__icon svg {
+  display: none;
+}
+
+.result.is-handoff .result__icon::after {
+  content: "→";
+  font-size: 1.15rem;
+  line-height: 1;
 }
 
 .result__head {
