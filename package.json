@@ -1,0 +1,8 @@
+{
+  "name": "billionaire-prosperity",
+  "private": true,
+  "description": "Static website checks. No dependencies and no build step.",
+  "scripts": {
+    "test": "node --test tests/site.test.js"
+  }
+}
