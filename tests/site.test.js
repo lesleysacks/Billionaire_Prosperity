@@ -205,6 +205,42 @@ test("local images and internal links resolve", () => {
   assert.deepEqual(brokenLinks, []);
 });
 
+test("Chery capacity stays unconfirmed and Suzuki cards keep 1–4", () => {
+  for (const page of ["index.html", "fleet.html"]) {
+    const html = read(page);
+    assert.equal(html.includes("1–6"), false, `${page} must not publish 1–6`);
+    assert.equal(/1-6 passengers/i.test(html), false, `${page} must not publish 1-6 passengers`);
+    const cheryAt = html.indexOf(">Chery Tiggo 4 Pro<");
+    assert.notEqual(cheryAt, -1, page);
+    const chery = html.slice(cheryAt, cheryAt + 1800);
+    assert.match(chery, /Passenger capacity<\/dt><dd>To be confirmed<\/dd>/);
+    assert.equal(chery.includes("1–4"), false, `${page} Chery capacity`);
+    assert.equal((html.match(/1–4 passengers/g) || []).length, 2, `${page} Suzuki capacities`);
+  }
+});
+
+test("enquiry surfaces say a request is not a confirmed booking", () => {
+  const phrase = /Availability is subject to confirmation\. A request is not a confirmed booking\./;
+  for (const page of ["contact.html", "index.html", "services.html", "wine-tours.html", "fleet.html", "about.html"]) {
+    assert.match(read(page), phrase, page);
+  }
+  const script = read("js/main.js");
+  assert.match(script, phrase);
+  assert.equal(script.includes("formEndpoint: \"\""), true);
+  assert.equal(/stripe|payfast|paypal|checkout/i.test(script), false);
+});
+
+test("gallery stays hidden until the client approves photos", () => {
+  const gallery = read("gallery.html");
+  assert.match(gallery, /name="robots" content="noindex, nofollow"/);
+  assert.match(gallery, /customer reviews and satisfied-client photos, only with permission/);
+  assert.equal(read("sitemap.xml").includes("gallery"), false);
+  for (const page of pages) {
+    if (page === "gallery.html") continue;
+    assert.equal(read(page).includes('href="gallery.html"'), false, `${page} gallery link`);
+  }
+});
+
 test("form controls on the contact page have matching labels", () => {
   const html = read("contact.html");
   const ids = [...html.matchAll(/<(?:input|select|textarea)\b[^>]*>/g)]

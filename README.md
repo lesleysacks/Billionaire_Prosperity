@@ -9,7 +9,7 @@ Static marketing and enquiry website for https://billionaireprosperity.co.za (Gi
 - `wine-tours.html`
 - `fleet.html`
 - `about.html`
-- `gallery.html` — hidden for now: not linked from nav, footer or sitemap, and marked `noindex`. The file is kept for later.
+- `gallery.html` — hidden for now: not linked from nav, footer or sitemap, and marked `noindex`. The file is kept. It may return later for customer reviews and satisfied-client photos, only with permission.
 - `contact.html` — enquiry form (WhatsApp, email, or copy until a form endpoint is set)
 - `404.html`
 
@@ -57,4 +57,4 @@ Save images at the paths shown on each placeholder. The page swaps the placehold
 
 ## Contact form
 
-The form checks name, phone, service, email format, a future travel date, and a whole-number passenger count in the browser. Nothing is stored on this site. On submit it prepares the enquiry for WhatsApp, email, or copy. Set `SITE.formEndpoint` if you want it posted to a form service instead.
+The form checks name, phone, service, email format, a future travel date, and a whole-number passenger count in the browser. Nothing is stored on this site. On submit it prepares the enquiry for WhatsApp, email, or copy. Availability is subject to confirmation. A request is not a confirmed booking. There is no booking engine and no payment processing. Set `SITE.formEndpoint` only if a real form service is approved.

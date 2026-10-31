@@ -287,8 +287,8 @@ function bootSite() {
 
     if (privacy) {
       privacy.textContent = endpoint
-        ? "Your details are only used to respond to your enquiry."
-        : "This page does not store your details or send the enquiry. WhatsApp or email opens only after you choose it, and nothing is delivered until you confirm it there.";
+        ? "Your details are only used to respond to your enquiry. Availability is subject to confirmation. A request is not a confirmed booking."
+        : "This page does not store your details or send the enquiry. WhatsApp or email opens only after you choose it, and nothing is delivered until you confirm it there. Availability is subject to confirmation. A request is not a confirmed booking.";
     }
 
     const field = (name) => form.elements.namedItem(name);
@@ -391,7 +391,7 @@ function bootSite() {
 
       if (mode === "sent") {
         resultTitle.textContent = "Thank you — your enquiry has been sent";
-        resultText.textContent = "We'll get back to you using the details you provided.";
+        resultText.textContent = "We'll get back to you using the details you provided. Availability is subject to confirmation. A request is not a confirmed booking.";
         handoff.hidden = true;
       } else {
         handoff.hidden = false;
@@ -426,8 +426,8 @@ function bootSite() {
         } else {
           resultTitle.textContent = "Your enquiry is ready to send";
           resultText.textContent = channels.length
-            ? `Nothing has been sent yet. This website does not store enquiries. Continue with ${channelText} and confirm the message there.`
-            : "This website does not store enquiries, and a direct contact channel is not available yet. Copy your enquiry below so you can send it once a channel is confirmed.";
+            ? `Nothing has been sent yet. This website does not store enquiries. Continue with ${channelText} and confirm the message there. Availability is subject to confirmation. A request is not a confirmed booking.`
+            : "This website does not store enquiries, and a direct contact channel is not available yet. Copy your enquiry below so you can send it once a channel is confirmed. Availability is subject to confirmation. A request is not a confirmed booking.";
         }
       }
 
