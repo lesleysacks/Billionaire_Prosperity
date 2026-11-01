@@ -14,7 +14,7 @@ const SITE = {
   email: "andremoses100.am@gmail.com",
   /** Google Apps Script web app. Public by design; it is not a secret. */
   formEndpoint:
-    "https://script.google.com/macros/s/AKfycbxSGkZRKjPSWGQ8c_NdHVKF8Rq3ZivQKjtcXiW_otXZELB8L4NsZf-8mOBbzTeq-9P7ag/exec",
+    "https://script.google.com/macros/s/AKfycbzZxz8HFsoFdJ6IRf3jJ87xUn8vtuT0HeSyCJF_Opb3SyE7TQj2VSgo1jPQemOg71FWPw/exec",
 };
 
 const DEFAULT_WHATSAPP_TEXT = "Hello, I'd like to enquire about private transport.";
