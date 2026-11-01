@@ -17,7 +17,7 @@ function decodeSrc(src) {
 
 test("WhatsApp link uses the international number and encodes the message", () => {
   assert.equal(enquiry.SITE.whatsapp, "27790235061");
-  assert.equal(enquiry.SITE.formEndpoint, "");
+  assert.match(enquiry.SITE.formEndpoint, /^https:\/\/script\.google\.com\/macros\/s\/AKfycb[\w-]+\/exec$/);
   assert.equal(enquiry.whatsappDigits("079 023 5061"), "0790235061");
   assert.equal(enquiry.whatsappDigits("+27 79 023 5061"), "27790235061");
   assert.equal(enquiry.whatsappDigits("123"), "");
@@ -166,7 +166,7 @@ test("private tour enquiry opens the contact form with the service selected", ()
   assert.match(contact, /<option value="private-tour">Private Tour<\/option>/);
   assert.match(contact, /id="enquiry-form"/);
   assert.match(contact, /data-service-preset/);
-  assert.match(contact, /Prepare WhatsApp enquiry/);
+  assert.match(contact, /Send enquiry/);
   assert.match(read("js/main.js"), /resolveServiceValue/);
 });
 
@@ -226,7 +226,9 @@ test("enquiry surfaces say a request is not a confirmed booking", () => {
   }
   const script = read("js/main.js");
   assert.match(script, phrase);
-  assert.equal(script.includes("formEndpoint: \"\""), true);
+  assert.match(script, /script\.google\.com\/macros\/s\//);
+  assert.equal(script.includes('mode: "no-cors"'), false);
+  assert.match(script, /mode: "cors"/);
   assert.equal(/stripe|payfast|paypal|checkout/i.test(script), false);
 });
 
@@ -250,4 +252,6 @@ test("form controls on the contact page have matching labels", () => {
     .map((match) => match[0].match(/\sfor="([^"]+)"/)?.[1])
     .filter(Boolean);
   assert.deepEqual(ids.sort(), [...labels].sort());
+  assert.match(html, /class="field--hp"/);
+  assert.match(html, /name="company"/);
 });

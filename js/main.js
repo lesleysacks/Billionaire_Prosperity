@@ -3,8 +3,8 @@
  * and the enquiry form.
  *
  * WhatsApp uses the published mobile number. Email uses the address already
- * shown in the site footer. formEndpoint stays empty: this site does not
- * store or send enquiries. Submit only prepares a WhatsApp or email handoff.
+ * shown in the site footer. The enquiry form posts to the Google Apps Script
+ * web app, which writes confirmed rows to the Enquiries sheet.
  */
 const SITE = {
   name: "Billionaire Prosperity",
@@ -12,8 +12,9 @@ const SITE = {
   whatsapp: "27790235061",
   /** Published enquiries address. Enables the email handoff; it does not send mail by itself. */
   email: "andremoses100.am@gmail.com",
-  /** Optional form service URL. Leave empty until a real endpoint is approved. */
-  formEndpoint: "",
+  /** Google Apps Script web app. Public by design; it is not a secret. */
+  formEndpoint:
+    "https://script.google.com/macros/s/AKfycbxSGkZRKjPSWGQ8c_NdHVKF8Rq3ZivQKjtcXiW_otXZELB8L4NsZf-8mOBbzTeq-9P7ag/exec",
 };
 
 const DEFAULT_WHATSAPP_TEXT = "Hello, I'd like to enquire about private transport.";
@@ -85,8 +86,8 @@ function validateEnquiry(values, today) {
 
   if (passengers) {
     const count = Number(passengers);
-    if (!Number.isInteger(count) || count < 1) {
-      errors.passengers = "Please enter a whole number of passengers.";
+    if (!Number.isInteger(count) || count < 1 || count > 50) {
+      errors.passengers = "Please enter a whole number of passengers between 1 and 50.";
     }
   }
 
@@ -123,6 +124,115 @@ function buildEnquiryMessage(fields, businessName) {
   return [`Enquiry for ${businessName}`, "", ...lines, ...(message ? ["", "Message:", message] : [])].join("\n");
 }
 
+function isHoneypotFilled(value) {
+  return Boolean(String(value ?? "").trim());
+}
+
+function isSubmitTimingInvalid(startedAt, now = Date.now()) {
+  if (startedAt == null || startedAt === "") return false;
+  const started = Number(startedAt);
+  if (!Number.isFinite(started) || started <= 0) return true;
+  if (started > now + 5 * 60 * 1000) return true;
+  if (now - started < 400) return true;
+  if (now - started > 7 * 24 * 60 * 60 * 1000) return true;
+  return false;
+}
+
+function createSubmitGuard() {
+  let busy = false;
+  return {
+    begin() {
+      if (busy) return false;
+      busy = true;
+      return true;
+    },
+    end() {
+      busy = false;
+    },
+    isBusy() {
+      return busy;
+    },
+  };
+}
+
+function buildEnquiryPayload(fields) {
+  const pickup = String(fields.pickup ?? "").trim();
+  const destination = String(fields.destination ?? "").trim();
+  const userMessage = String(fields.message ?? "").trim();
+  const messageParts = [];
+  if (pickup) messageParts.push(`Pickup: ${pickup}`);
+  if (destination) messageParts.push(`Destination: ${destination}`);
+  if (userMessage) {
+    if (messageParts.length) messageParts.push("", userMessage);
+    else messageParts.push(userMessage);
+  }
+
+  return {
+    name: String(fields.name ?? "").trim(),
+    phone: String(fields.phone ?? "").trim(),
+    email: String(fields.email ?? "").trim(),
+    service: String(fields.serviceLabel ?? fields.service ?? "").trim(),
+    travel_date: String(fields.date ?? fields.travel_date ?? "").trim(),
+    passengers: String(fields.passengers ?? "").trim(),
+    message: messageParts.join("\n"),
+    source: "Website",
+    company: String(fields.company ?? ""),
+    started_at: String(fields.startedAt ?? fields.started_at ?? ""),
+  };
+}
+
+function encodeEnquiryBody(payload) {
+  const body = new URLSearchParams();
+  Object.entries(payload).forEach(([key, value]) => {
+    body.set(key, String(value ?? ""));
+  });
+  return body.toString();
+}
+
+function parseEnquiryResponse(text, httpOk, responseType) {
+  if (responseType === "opaque" || responseType === "error") {
+    return { ok: false, error: "opaque" };
+  }
+  if (!httpOk) return { ok: false, error: "http" };
+  const raw = String(text ?? "").trim();
+  if (!raw) return { ok: false, error: "empty" };
+  try {
+    const data = JSON.parse(raw);
+    const id = data && typeof data.id === "string" ? data.id.trim() : "";
+    if (data && data.status === "ok" && /^BP-\d{4,}$/.test(id)) {
+      return { ok: true, id, duplicate: Boolean(data.duplicate) };
+    }
+    return { ok: false, error: (data && data.error) || "invalid" };
+  } catch {
+    return { ok: false, error: "parse" };
+  }
+}
+
+async function submitEnquiry(endpoint, payload, fetchFn = fetch) {
+  const url = String(endpoint ?? "").trim();
+  if (!url) return { ok: false, error: "config" };
+
+  const response = await fetchFn(url, {
+    method: "POST",
+    mode: "cors",
+    redirect: "follow",
+    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+    body: encodeEnquiryBody(payload),
+  });
+
+  const type = response && response.type ? response.type : "";
+  if (type === "opaque") return { ok: false, error: "opaque" };
+
+  const httpOk = Boolean(response && response.ok);
+  let text = "";
+  try {
+    text = response && typeof response.text === "function" ? await response.text() : "";
+  } catch {
+    return { ok: false, error: "empty" };
+  }
+  return parseEnquiryResponse(text, httpOk, type);
+}
+
 const enquiryApi = {
   SITE,
   whatsappDigits,
@@ -134,6 +244,13 @@ const enquiryApi = {
   validateEnquiry,
   formatTravelDate,
   buildEnquiryMessage,
+  isHoneypotFilled,
+  isSubmitTimingInvalid,
+  createSubmitGuard,
+  buildEnquiryPayload,
+  encodeEnquiryBody,
+  parseEnquiryResponse,
+  submitEnquiry,
 };
 
 if (typeof module !== "undefined" && module.exports) {
@@ -282,14 +399,16 @@ function bootSite() {
     const privacy = form.querySelector("[data-privacy]");
     if (!resultTitle || !resultText || !handoff || !sendWa || !sendEmail || !copyBtn || !copyLabel || !preview) return;
 
-    const readyLabel = waNumber ? "Prepare WhatsApp enquiry" : "Prepare enquiry";
-    if (!endpoint) submitLabel.textContent = readyLabel;
+    const readyLabel = endpoint ? "Send enquiry" : waNumber ? "Prepare WhatsApp enquiry" : "Prepare enquiry";
+    submitLabel.textContent = readyLabel;
 
     if (privacy) {
       privacy.textContent = endpoint
         ? "Your details are only used to respond to your enquiry. Availability is subject to confirmation. A request is not a confirmed booking."
         : "This page does not store your details or send the enquiry. WhatsApp or email opens only after you choose it, and nothing is delivered until you confirm it there. Availability is subject to confirmation. A request is not a confirmed booking.";
     }
+
+    let formStartedAt = Date.now();
 
     const field = (name) => form.elements.namedItem(name);
     const dateInput = field("date");
@@ -383,7 +502,7 @@ function bootSite() {
       );
     };
 
-    const showResult = (mode) => {
+    const showResult = (mode, extra) => {
       const text = currentMessage();
       preview.value = text;
       result.classList.toggle("is-sent", mode === "sent");
@@ -391,7 +510,9 @@ function bootSite() {
 
       if (mode === "sent") {
         resultTitle.textContent = "Thank you — your enquiry has been sent";
-        resultText.textContent = "We'll get back to you using the details you provided. Availability is subject to confirmation. A request is not a confirmed booking.";
+        resultText.textContent = extra && extra.enquiryId
+          ? `Your enquiry number is ${extra.enquiryId}. We'll get back to you using the details you provided. Availability is subject to confirmation. A request is not a confirmed booking.`
+          : "We'll get back to you using the details you provided. Availability is subject to confirmation. A request is not a confirmed booking.";
         handoff.hidden = true;
       } else {
         handoff.hidden = false;
@@ -453,48 +574,69 @@ function bootSite() {
       }, 2000);
     });
 
-    let busy = false;
+    const submitGuard = createSubmitGuard();
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (busy) return;
+      if (!submitGuard.begin()) return;
       attempted = true;
       const results = fieldNames.map((name) => validateField(name));
       const firstInvalid = fieldNames.find((_, index) => !results[index]);
       summary.hidden = !firstInvalid;
       if (firstInvalid) {
+        submitGuard.end();
         field(firstInvalid)?.focus();
         return;
       }
 
-      busy = true;
       submit.disabled = true;
+      submit.setAttribute("aria-busy", "true");
       submitLabel.textContent = endpoint ? "Sending…" : "Preparing…";
+      result.hidden = true;
       try {
         if (!endpoint) {
           showResult("handoff");
           return;
         }
 
-        if (field("company")?.value) return;
-
         const data = new FormData(form);
-        data.set("service", serviceLabel());
-        const response = await fetch(endpoint, {
-          method: "POST",
-          body: data,
-          headers: { Accept: "application/json" },
+        const get = (key) => String(data.get(key) ?? "");
+        const payload = buildEnquiryPayload({
+          name: get("name"),
+          phone: get("phone"),
+          email: get("email"),
+          serviceLabel: serviceLabel(),
+          pickup: get("pickup"),
+          destination: get("destination"),
+          date: get("date"),
+          passengers: get("passengers"),
+          message: get("message"),
+          company: get("company"),
+          startedAt: String(formStartedAt),
         });
-        if (!response.ok) throw new Error(`Request failed: ${response.status}`);
-        showResult("sent");
+
+        if (isHoneypotFilled(payload.company) || isSubmitTimingInvalid(payload.started_at)) {
+          showResult("failed");
+          return;
+        }
+
+        const outcome = await submitEnquiry(endpoint, payload);
+        if (!outcome.ok || !outcome.id) {
+          showResult("failed");
+          return;
+        }
+
+        showResult("sent", { enquiryId: outcome.id });
         form.reset();
         attempted = false;
         dateInput.min = today;
+        formStartedAt = Date.now();
       } catch {
         showResult("failed");
       } finally {
-        busy = false;
+        submitGuard.end();
         submit.disabled = false;
-        submitLabel.textContent = endpoint ? "Send enquiry" : readyLabel;
+        submit.removeAttribute("aria-busy");
+        submitLabel.textContent = readyLabel;
       }
     });
   }

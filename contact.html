@@ -96,9 +96,9 @@
         <div class="container contact__grid">
           <div class="contact__form-wrap">
             <h2 class="h3 contact__form-title">Send an enquiry</h2>
-            <p class="contact__form-intro">Prepare your details here, then send them yourself on WhatsApp. This page does not store the enquiry. Availability is subject to confirmation. A request is not a confirmed booking. Fields marked <span aria-hidden="true">*</span><span class="sr-only">with an asterisk</span> are required.</p>
+            <p class="contact__form-intro">Tell us where you'd like to go and when you'd like to travel. We'll receive your enquiry and get back to you. Availability is subject to confirmation. A request is not a confirmed booking. Fields marked <span aria-hidden="true">*</span><span class="sr-only">with an asterisk</span> are required.</p>
             <noscript>
-              <p class="notice">The enquiry form needs JavaScript to prepare your message. Please enable JavaScript, or contact us directly using the options on this page.</p>
+              <p class="notice">The enquiry form needs JavaScript to send your message. Please enable JavaScript, or contact us directly using the options on this page.</p>
             </noscript>
             <form id="enquiry-form" class="form" novalidate data-enquiry-form>
               <p class="form__preset" data-service-preset hidden></p>
@@ -149,7 +149,7 @@
                 </div>
                 <div class="field">
                   <label for="f-passengers">Passengers</label>
-                  <input id="f-passengers" name="passengers" type="number" inputmode="numeric" min="1" step="1" aria-describedby="f-passengers-error">
+                  <input id="f-passengers" name="passengers" type="number" inputmode="numeric" min="1" max="50" step="1" aria-describedby="f-passengers-error">
                   <p class="field__error" id="f-passengers-error" data-error-for="passengers" aria-live="polite"></p>
                 </div>
                 <div class="field field--full">
@@ -163,10 +163,10 @@
               </div>
               <div class="form__footer">
                 <button class="btn form__submit" type="submit" data-submit>
-                  <span data-submit-label>Prepare WhatsApp enquiry</span>
+                  <span data-submit-label>Send enquiry</span>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
                 </button>
-                <p class="form__privacy" data-privacy>This website doesn't store your details. We'll help you send your enquiry directly to us. Availability is subject to confirmation. A request is not a confirmed booking.</p>
+                <p class="form__privacy" data-privacy>Your details are only used to respond to your enquiry. Availability is subject to confirmation. A request is not a confirmed booking.</p>
               </div>
             </form>
             <div class="result" data-result hidden tabindex="-1" aria-live="polite">
@@ -216,9 +216,9 @@
             <div class="direct">
               <h2 class="direct__title">What happens next</h2>
               <ol class="next-steps">
-                <li>Prepare your enquiry on this page.</li>
-                <li>Send it yourself on WhatsApp or by email. Nothing is delivered until you confirm it there.</li>
-                <li>We reply to confirm availability and the details. A request is not a confirmed booking.</li>
+                <li>Send your enquiry using this form, or contact us on WhatsApp or by email.</li>
+                <li>We receive it and reply to confirm availability and the details.</li>
+                <li>A request is not a confirmed booking.</li>
               </ol>
             </div>
           </aside>
