@@ -65,8 +65,10 @@ Pickup and destination are appended to **Customer Message**. Historical columns 
 
 After an enquiry row is saved, Apps Script sends email with `MailApp`:
 
-- **Customer confirmation** — only when a valid email was supplied. Includes the BP reference, service, travel date, passengers, pickup/destination, and a clear statement that the enquiry is **not** a confirmed booking.
-- **Business notification** — always attempted, to `andremoses100.am@gmail.com`. Includes the enquiry ID, contact details, journey fields, and a link to the sheet.
+- **Customer confirmation** — only when a valid email was supplied, and only to that submitted address (`lead.email`). There is no fallback to the business address. Includes the BP reference, service, travel date, passengers, pickup/destination, and a clear statement that the enquiry is **not** a confirmed booking.
+- **Business notification** — always attempted, and only to `CONFIG.BUSINESS_EMAIL`, which must be `andremoses100.am@gmail.com`. The script refuses to send if the resolved recipient is anything else, including `lesleysacks1@gmail.com`. It does not CC, BCC, or send the business copy to the customer email.
+
+`MailApp` sends **from** the Apps Script owner account. A copy in that account's Sent folder is expected. The **To** header of the business notification must still be `andremoses100.am@gmail.com`.
 
 The website response is the save result only (`{"status":"ok","id":"BP-####"}`). Email failure does not delete the row, does not change the enquiry ID, and does not show an error on the website.
 
@@ -76,10 +78,10 @@ Notification state is stored on the enquiry row:
 | --- | --- |
 | Pending | Saved, not yet sent |
 | Sent | MailApp accepted the message |
-| Failed | Send threw; retry from the menu |
+| Failed | Send threw or the business recipient was blocked; retry from the menu |
 | Skipped | Customer email omitted because none was supplied |
 
-A 5-minute time trigger processes Pending and Failed rows. Duplicates within two minutes reuse the existing ID and do not send a second pair of emails.
+A 5-minute time trigger processes Pending and Failed rows. `doPost` keeps `LockService` through save and send so the trigger cannot also deliver the same Pending row. Each notification is claimed before send. Status is written to Sent only after MailApp succeeds. Changing `BUSINESS_EMAIL` does not resend historical Sent rows. Duplicates within two minutes reuse the existing ID and do not send a second pair of emails.
 
 ### New spreadsheet columns (appended after Notes)
 
@@ -126,17 +128,31 @@ Business setup: Meta Business Manager, a WhatsApp Business Account, a verified d
 
 Paste and deploy **before** expecting emails, the menu, or dashboard refresh from Apps Script. This repository does not deploy the script automatically.
 
+Changing `CONFIG.BUSINESS_EMAIL` in the editor and clicking Save is **not** enough for the public form. The website calls the **deployed** `/exec` version. Time-driven triggers run the **latest saved** project code. Those can differ.
+
 1. Open the sheet → **Extensions → Apps Script**.
-2. Replace `Code.gs` with `google-apps-script/Code.gs` from this repository.
-3. Save.
-4. **Deploy → New deployment** (or **Manage deployments → Edit → New version**).
+2. Confirm you are in the script project bound to [Billionaire Prosperity - Enquiry Register](https://docs.google.com/spreadsheets/d/1F2hVNrAnCIa9PeO9e3bKT2e_LYNQ171Dvh0R2HTfL9E/edit).
+3. Replace `Code.gs` with `google-apps-script/Code.gs` from this repository.
+4. Confirm `CONFIG.BUSINESS_EMAIL` and `CONFIG.REQUIRED_BUSINESS_EMAIL` are both `andremoses100.am@gmail.com`.
+5. Save.
+6. **Deploy → Manage deployments**. Edit the **existing** web app whose `/exec` path matches `SITE.formEndpoint` in `js/main.js` (`…/AKfycbzZxz8HFsoFdJ6IRf3jJ87xUn8vtuT0HeSyCJF_Opb3SyE7TQj2VSgo1jPQemOg71FWPw/exec`). Choose **New version**, not a second deployment.
    - Type: Web app
    - Execute as: Me
    - Who has access: Anyone
-5. Authorise **spreadsheet**, **gmail.send** / MailApp, and **script.scriptapp** (triggers) when Google prompts.
-6. If the `/exec` URL changes, update `SITE.formEndpoint` in `js/main.js`.
-7. Reload the sheet. Use **Billionaire Prosperity → Set up lead management** once (columns, dropdowns, ZAR format, Dashboard tab, retry trigger).
-8. Send one test enquiry from `contact.html` with your own email. Confirm the on-page `BP-####` ID, the row in the sheet, customer and business emails, and Dashboard totals. Availability is subject to confirmation. A request is not a confirmed booking.
+7. Authorise **spreadsheet**, **gmail.send** / MailApp, and **script.scriptapp** (triggers) when Google prompts.
+8. Leave the public `/exec` URL unchanged if that existing deployment was versioned. Update `SITE.formEndpoint` only if Google issued a new `/exec` URL.
+9. Do **not** run **Set up lead management** again just to change the email recipient. That menu recreates the 5-minute `processPendingNotifications` trigger. Reinstall the trigger only if it is missing: **Triggers** (clock icon) should show one time-driven `processPendingNotifications` every 5 minutes.
+
+#### Manual email-routing test
+
+Use a new customer email that is not `lesleysacks1@gmail.com`. Do not resend historical Sent rows.
+
+1. Submit one enquiry from `contact.html`.
+2. Confirm the page shows a `BP-####` ID and a new Enquiries row with that ID.
+3. Customer confirmation **To** = the submitted email. Business notification **To** = `andremoses100.am@gmail.com`.
+4. Confirm there is no CC or BCC, and no new business notification addressed to `lesleysacks1@gmail.com`. A Sent-folder copy in the script-owner Gmail account is normal because MailApp sends from that account.
+5. Submit a second enquiry with the email field blank. Customer Email Status must be Skipped. Business Email Status must still become Sent to `andremoses100.am@gmail.com`.
+6. If a send is marked Failed, use **Billionaire Prosperity → Retry failed email notifications**. The same enquiry ID must be reused. Sent rows must not send again.
 
 `doGet` is a health check only. It must not write rows. Keep the sheet / script timezone at `Africa/Johannesburg`.
 

@@ -211,6 +211,274 @@ test("conversion rate is confirmed bookings divided by total enquiries", () => {
   assert.equal(summary.services["Wine Tour"], 4);
 });
 
+test("customer confirmation goes only to the submitted customer email", () => {
+  const store = emptyStore();
+  const mailer = recordingMailer();
+  logic.confirmSavedEnquiry(store, validEvent(), mailer, now, today);
+  const customer = mailer.sent.find((msg) => msg.subject.includes("we received enquiry"));
+  assert.ok(customer);
+  assert.equal(customer.to, "sam@example.com");
+  assert.equal(customer.to, logic.resolveCustomerRecipient({ email: "sam@example.com" }));
+  assert.notEqual(customer.to, logic.CONFIG.BUSINESS_EMAIL);
+  assert.equal(customer.cc, undefined);
+  assert.equal(customer.bcc, undefined);
+});
+
+test("customer confirmation never falls back to the business address", () => {
+  const email = logic.buildCustomerEmail({
+    id: "BP-0001",
+    name: "Sam Naidoo",
+    email: "",
+    service: "Wine Tour",
+  });
+  assert.equal(email.to, "");
+  assert.notEqual(email.to, "andremoses100.am@gmail.com");
+  assert.throws(
+    () => logic.assertSafeOutgoingEmail({ to: "andremoses100.am@gmail.com", subject: "x" }, "customer", { email: "" }),
+    /missing_customer_recipient|invalid_customer_recipient/,
+  );
+});
+
+test("business notification goes only to andremoses100.am@gmail.com", () => {
+  const store = emptyStore();
+  const mailer = recordingMailer();
+  logic.confirmSavedEnquiry(store, validEvent(), mailer, now, today);
+  const businessMessages = mailer.sent.filter((msg) => msg.subject.startsWith("New enquiry"));
+  assert.equal(businessMessages.length, 1);
+  assert.equal(businessMessages[0].to, "andremoses100.am@gmail.com");
+  assert.equal(businessMessages[0].to, logic.resolveBusinessRecipient());
+  assert.equal(businessMessages[0].cc, undefined);
+  assert.equal(businessMessages[0].bcc, undefined);
+  assert.equal(mailer.sent.filter((msg) => msg.to === "sam@example.com").length, 1);
+});
+
+test("lesleysacks1@gmail.com is never used as a business recipient", () => {
+  const original = logic.CONFIG.BUSINESS_EMAIL;
+  logic.CONFIG.BUSINESS_EMAIL = "lesleysacks1@gmail.com";
+  try {
+    assert.equal(logic.resolveBusinessRecipient(), "");
+    assert.equal(logic.isBlockedBusinessRecipient("lesleysacks1@gmail.com"), true);
+    const store = emptyStore();
+    const mailer = recordingMailer();
+    const result = logic.confirmSavedEnquiry(store, validEvent(), mailer, now, today);
+    assert.equal(result.status, "ok");
+    assert.equal(result.id, "BP-0001");
+    assert.equal(result.customerNotify, "Sent");
+    assert.equal(result.businessNotify, "Failed");
+    assert.match(store.rows[0].notifyError, /invalid_business_recipient/);
+    assert.equal(
+      mailer.sent.some((msg) => logic.normalizeEmail(msg.to) === "lesleysacks1@gmail.com"),
+      false,
+    );
+    assert.equal(mailer.sent.filter((msg) => msg.subject.startsWith("New enquiry")).length, 0);
+    assert.equal(mailer.sent[0].to, "sam@example.com");
+  } finally {
+    logic.CONFIG.BUSINESS_EMAIL = original;
+  }
+});
+
+test("personal Gmail can be the customer recipient but never the business recipient", () => {
+  const store = emptyStore();
+  const mailer = recordingMailer();
+  logic.confirmSavedEnquiry(
+    store,
+    validEvent({ email: "lesleysacks1@gmail.com" }),
+    mailer,
+    now,
+    today,
+  );
+  const customer = mailer.sent.find((msg) => msg.subject.includes("we received enquiry"));
+  const business = mailer.sent.find((msg) => msg.subject.startsWith("New enquiry"));
+  assert.equal(customer.to, "lesleysacks1@gmail.com");
+  assert.equal(business.to, "andremoses100.am@gmail.com");
+  assert.notEqual(business.to, "lesleysacks1@gmail.com");
+});
+
+test("missing customer email does not prevent the business notification", () => {
+  const store = emptyStore();
+  const mailer = recordingMailer();
+  const result = logic.confirmSavedEnquiry(store, validEvent({ email: "" }), mailer, now, today);
+  assert.equal(result.status, "ok");
+  assert.equal(result.id, "BP-0001");
+  assert.equal(result.customerNotify, "Skipped");
+  assert.equal(result.businessNotify, "Sent");
+  assert.equal(mailer.sent.length, 1);
+  assert.equal(mailer.sent[0].to, "andremoses100.am@gmail.com");
+  assert.match(mailer.sent[0].subject, /New enquiry BP-0001/);
+});
+
+test("failed email attempts can be retried safely without changing the enquiry", () => {
+  const store = emptyStore();
+  const failing = recordingMailer(["sam@example.com", "andremoses100.am@gmail.com"]);
+  logic.confirmSavedEnquiry(store, validEvent(), failing, now, today);
+  const before = {
+    id: store.rows[0].id,
+    name: store.rows[0].name,
+    email: store.rows[0].email,
+    status: store.rows[0].status,
+  };
+  const retryMailer = recordingMailer();
+  const retry = logic.retryFailedNotifications(store, retryMailer, now);
+  assert.deepEqual(retry.retried, ["BP-0001"]);
+  assert.equal(store.rows[0].id, before.id);
+  assert.equal(store.rows[0].name, before.name);
+  assert.equal(store.rows[0].email, before.email);
+  assert.equal(store.rows[0].status, before.status);
+  assert.equal(store.rows[0].customerNotify, "Sent");
+  assert.equal(store.rows[0].businessNotify, "Sent");
+  assert.equal(retryMailer.sent.length, 2);
+  assert.equal(
+    retryMailer.sent.filter((msg) => msg.to === "andremoses100.am@gmail.com").length,
+    1,
+  );
+});
+
+test("already-sent notifications are not sent again by POST, retry, or the trigger", () => {
+  const store = emptyStore();
+  const mailer = recordingMailer();
+  logic.confirmSavedEnquiry(store, validEvent(), mailer, now, today);
+  assert.equal(mailer.sent.length, 2);
+  const retry = logic.retryFailedNotifications(store, mailer, now);
+  const pending = logic.processPendingNotifications(store, mailer, now);
+  const second = logic.confirmSavedEnquiry(store, validEvent(), mailer, now, today);
+  assert.deepEqual(retry.retried, []);
+  assert.deepEqual(pending.processed, []);
+  assert.equal(second.duplicate, true);
+  assert.equal(mailer.sent.length, 2);
+});
+
+test("concurrent POST and trigger executions cannot send the same notification twice", () => {
+  const store = emptyStore();
+  const lock = logic.createNotificationLock();
+  const claims = logic.createClaimStore();
+  const mailer = recordingMailer();
+  let triggerResult;
+
+  const intercepting = {
+    sent: mailer.sent,
+    send(message) {
+      triggerResult = logic.processPendingNotifications(store, mailer, now, { lock, claims });
+      mailer.sent.push(message);
+    },
+  };
+
+  const result = logic.confirmSavedEnquiry(store, validEvent(), intercepting, now, today, {
+    lock,
+    claims,
+  });
+  assert.equal(result.status, "ok");
+  assert.equal(result.customerNotify, "Sent");
+  assert.equal(result.businessNotify, "Sent");
+  assert.equal(triggerResult.status, "busy");
+  assert.equal(mailer.sent.filter((msg) => msg.to === "sam@example.com").length, 1);
+  assert.equal(mailer.sent.filter((msg) => msg.to === "andremoses100.am@gmail.com").length, 1);
+});
+
+test("claim store blocks a second worker that still sees Pending", () => {
+  const claims = logic.createClaimStore();
+  const mailer = recordingMailer();
+  const shared = {
+    id: "BP-0099",
+    name: "Sam Naidoo",
+    email: "sam@example.com",
+    service: "Private Tour",
+    customerNotify: "Pending",
+    businessNotify: "Pending",
+    notifyAttempts: 0,
+    notifyError: "",
+  };
+  const stale = {
+    ...shared,
+    customerNotify: "Pending",
+    businessNotify: "Pending",
+  };
+
+  let nested;
+  const intercepting = {
+    sent: mailer.sent,
+    send(message) {
+      nested = logic.deliverNotifications(stale, mailer, now, { claims });
+      mailer.sent.push(message);
+    },
+  };
+
+  const first = logic.deliverNotifications(shared, intercepting, now, { claims });
+  assert.equal(first.status, "ok");
+  assert.equal(nested.status, "busy");
+  assert.equal(mailer.sent.filter((msg) => msg.to === "andremoses100.am@gmail.com").length, 1);
+  assert.equal(mailer.sent.filter((msg) => msg.to === "sam@example.com").length, 1);
+});
+
+test("existing enquiry data remains intact when routing rules change", () => {
+  const store = emptyStore();
+  store.ids[0] = "BP-0001";
+  store.rows[0] = {
+    row: 2,
+    id: "BP-0001",
+    received: "2026-10-01 09:00",
+    name: "Historical Lead",
+    phone: "0791234567",
+    email: "old@example.com",
+    service: "Wine Tour",
+    travel_date: "2026-10-12",
+    passengers: "2",
+    message: "Keep this row",
+    source: "Website",
+    status: "Contacted",
+    followUpDate: "2026-10-05",
+    quotedAmount: 1800,
+    notes: "Called",
+    lastContact: "2026-10-02",
+    bookingValue: "",
+    customerNotify: "Sent",
+    businessNotify: "Sent",
+    customerNotifyAt: "2026-10-01 09:01",
+    businessNotifyAt: "2026-10-01 09:01",
+    notifyAttempts: 1,
+    notifyError: "",
+  };
+  const snapshot = JSON.parse(JSON.stringify(store.rows[0]));
+  const mailer = recordingMailer();
+  logic.retryFailedNotifications(store, mailer, now);
+  logic.processPendingNotifications(store, mailer, now);
+  const original = logic.CONFIG.BUSINESS_EMAIL;
+  logic.CONFIG.BUSINESS_EMAIL = "lesleysacks1@gmail.com";
+  try {
+    logic.processPendingNotifications(store, mailer, now);
+  } finally {
+    logic.CONFIG.BUSINESS_EMAIL = original;
+  }
+  assert.deepEqual(store.rows[0], snapshot);
+  assert.equal(mailer.sent.length, 0);
+});
+
+test("business emails reject CC, BCC, and non-allowlisted recipients", () => {
+  const lead = { id: "BP-0001", email: "sam@example.com", name: "Sam", service: "Wine Tour" };
+  assert.throws(
+    () =>
+      logic.assertSafeOutgoingEmail(
+        { to: "andremoses100.am@gmail.com", cc: "lesleysacks1@gmail.com", subject: "x" },
+        "business",
+        lead,
+      ),
+    /copy_recipients_forbidden/,
+  );
+  assert.throws(
+    () =>
+      logic.assertSafeOutgoingEmail(
+        { to: "lesleysacks1@gmail.com", subject: "x" },
+        "business",
+        lead,
+      ),
+    /invalid_business_recipient|blocked_business_recipient/,
+  );
+  assert.throws(
+    () =>
+      logic.assertSafeOutgoingEmail({ to: "sam@example.com", subject: "x" }, "business", lead),
+    /invalid_business_recipient/,
+  );
+});
+
 test("overdue follow-ups ignore booked and closed leads", () => {
   const summary = logic.summariseLeads(
     [

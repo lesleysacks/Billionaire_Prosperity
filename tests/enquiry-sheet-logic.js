@@ -6,6 +6,8 @@
 const CONFIG = {
   BUSINESS_NAME: "Billionaire Prosperity",
   BUSINESS_EMAIL: "andremoses100.am@gmail.com",
+  REQUIRED_BUSINESS_EMAIL: "andremoses100.am@gmail.com",
+  BLOCKED_BUSINESS_RECIPIENTS: ["lesleysacks1@gmail.com"],
   BUSINESS_PHONE: "079 023 5061",
   BUSINESS_PHONE_ALT: "062 133 8497",
   WHATSAPP_DISPLAY: "+27 79 023 5061",
@@ -22,6 +24,7 @@ const CONFIG = {
   MIN_ELAPSED_MS: 400,
   MAX_ELAPSED_MS: 7 * 24 * 60 * 60 * 1000,
   DUPLICATE_WINDOW_MS: 2 * 60 * 1000,
+  NOTIFY_CLAIM_TTL_MS: 5 * 60 * 1000,
   SERVICE_LABELS: {
     "airport-transfer": "Airport Transfer",
     "wine-tour": "Wine Tour",
@@ -253,6 +256,102 @@ function shouldSendNotification(currentStatus) {
   return currentStatus === CONFIG.NOTIFY_PENDING || currentStatus === CONFIG.NOTIFY_FAILED;
 }
 
+function normalizeEmail(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function isBlockedBusinessRecipient(email) {
+  const normalized = normalizeEmail(email);
+  return CONFIG.BLOCKED_BUSINESS_RECIPIENTS.some((blocked) => normalizeEmail(blocked) === normalized);
+}
+
+function resolveBusinessRecipient() {
+  const configured = normalizeEmail(CONFIG.BUSINESS_EMAIL);
+  const required = normalizeEmail(CONFIG.REQUIRED_BUSINESS_EMAIL);
+  if (!configured || !required) return "";
+  if (configured !== required) return "";
+  if (isBlockedBusinessRecipient(configured) || isBlockedBusinessRecipient(required)) return "";
+  return required;
+}
+
+function resolveCustomerRecipient(lead) {
+  return normalizeEmail(lead && lead.email);
+}
+
+function hasCopyRecipients(message) {
+  if (!message) return false;
+  return Boolean(message.cc || message.bcc || message.CC || message.Bcc || message.BCC);
+}
+
+function assertSafeOutgoingEmail(message, kind, lead) {
+  if (!message || typeof message !== "object") throw new Error("invalid_message");
+  if (hasCopyRecipients(message)) throw new Error("copy_recipients_forbidden");
+  const to = normalizeEmail(message.to);
+  if (kind === "customer") {
+    const expected = resolveCustomerRecipient(lead);
+    if (!expected) throw new Error("missing_customer_recipient");
+    if (to !== expected) throw new Error("invalid_customer_recipient");
+    return to;
+  }
+  if (kind === "business") {
+    const expected = resolveBusinessRecipient();
+    if (!expected || to !== expected) throw new Error("invalid_business_recipient");
+    if (isBlockedBusinessRecipient(to)) throw new Error("blocked_business_recipient");
+    return to;
+  }
+  throw new Error("unknown_email_kind");
+}
+
+function sendValidatedEmail(mailer, message, kind, lead) {
+  const to = assertSafeOutgoingEmail(message, kind, lead);
+  mailer.send({
+    to,
+    subject: message.subject,
+    html: message.html,
+    name: CONFIG.BUSINESS_NAME,
+  });
+}
+
+function createClaimStore() {
+  const claims = new Map();
+  return {
+    tryClaim(enquiryId, kind, now, ttlMs) {
+      if (!enquiryId || !kind) return false;
+      const ttl = ttlMs == null ? CONFIG.NOTIFY_CLAIM_TTL_MS : ttlMs;
+      const key = `${enquiryId}:${kind}`;
+      const existing = claims.get(key);
+      if (existing != null && now.getTime() - existing < ttl) return false;
+      claims.set(key, now.getTime());
+      return true;
+    },
+    release(enquiryId, kind) {
+      claims.delete(`${enquiryId}:${kind}`);
+    },
+    has(enquiryId, kind) {
+      return claims.has(`${enquiryId}:${kind}`);
+    },
+  };
+}
+
+function createNotificationLock() {
+  let held = false;
+  return {
+    tryLock() {
+      if (held) return false;
+      held = true;
+      return true;
+    },
+    releaseLock() {
+      held = false;
+    },
+    isHeld() {
+      return held;
+    },
+  };
+}
+
 function handleEnquiry(event, sheetState, now = new Date(), todayISO) {
   const fields = readRequestFields(event);
   if (String(fields.company || "").trim()) return { status: "error", error: "invalid" };
@@ -338,7 +437,7 @@ function buildCustomerEmail(lead) {
     ? `<p style="white-space:pre-wrap">${escapeHtml(journey.notes)}</p>`
     : "";
   return {
-    to: lead.email,
+    to: resolveCustomerRecipient(lead),
     subject: `${CONFIG.BUSINESS_NAME} — we received enquiry ${lead.id}`,
     html: `<div style="font-family:Georgia,serif;background:#faf7f1;padding:24px;color:#141312">
       <h1 style="font-weight:500;color:#6b2131">${escapeHtml(CONFIG.BUSINESS_NAME)}</h1>
@@ -372,7 +471,7 @@ function buildBusinessEmail(lead) {
     .join("");
   const notes = journey.notes ? `<p style="white-space:pre-wrap">${escapeHtml(journey.notes)}</p>` : "<p>No extra message.</p>";
   return {
-    to: CONFIG.BUSINESS_EMAIL,
+    to: resolveBusinessRecipient(),
     subject: `New enquiry ${lead.id} — ${lead.service}`,
     html: `<div style="font-family:Arial,sans-serif;background:#ffffff;padding:16px;color:#141312;max-width:640px">
       <h1 style="font-size:22px;color:#6b2131">New enquiry</h1>
@@ -384,22 +483,60 @@ function buildBusinessEmail(lead) {
   };
 }
 
-function deliverNotifications(lead, mailer, now = new Date()) {
+function deliverNotifications(lead, mailer, now = new Date(), options = {}) {
+  const claims = options.claims;
   const result = {
+    status: "ok",
     customer: lead.customerNotify,
     business: lead.businessNotify,
     whatsapp: CONFIG.NOTIFY_SKIPPED,
     sent: [],
     failed: [],
   };
+
+  if (!lead || !String(lead.id || "").trim()) {
+    return { status: "error", error: "missing", customer: "", business: "", sent: [], failed: [] };
+  }
+
+  let customerStatus = String(lead.customerNotify || "");
+  let businessStatus = String(lead.businessNotify || CONFIG.NOTIFY_PENDING);
+  if (!customerStatus) customerStatus = initialNotificationState(lead.email).customer;
+
+  const hasCustomerEmail = Boolean(resolveCustomerRecipient(lead));
+  if (!hasCustomerEmail) customerStatus = CONFIG.NOTIFY_SKIPPED;
+
+  const wantCustomer = hasCustomerEmail && shouldSendNotification(customerStatus);
+  const wantBusiness = shouldSendNotification(businessStatus);
+  const businessRecipient = resolveBusinessRecipient();
+  const customerClaimed = wantCustomer && (!claims || claims.tryClaim(lead.id, "customer", now));
+  const businessClaimed =
+    wantBusiness && Boolean(businessRecipient) && (!claims || claims.tryClaim(lead.id, "business", now));
+
+  if (!wantCustomer && !wantBusiness) {
+    if (!hasCustomerEmail) {
+      lead.customerNotify = CONFIG.NOTIFY_SKIPPED;
+    }
+    result.customer = customerStatus;
+    result.business = businessStatus;
+    return result;
+  }
+
+  if (wantCustomer && !customerClaimed && (!wantBusiness || !businessClaimed)) {
+    result.status = "busy";
+    result.customer = customerStatus;
+    result.business = businessStatus;
+    return result;
+  }
+
   lead.notifyAttempts = Number(lead.notifyAttempts || 0) + 1;
   lead.notifyError = "";
 
-  if (lead.customerNotify === CONFIG.NOTIFY_SKIPPED) {
+  if (!hasCustomerEmail) {
+    lead.customerNotify = CONFIG.NOTIFY_SKIPPED;
     result.customer = CONFIG.NOTIFY_SKIPPED;
-  } else if (shouldSendNotification(lead.customerNotify)) {
+  } else if (customerClaimed) {
     try {
-      mailer.send(buildCustomerEmail(lead));
+      sendValidatedEmail(mailer, buildCustomerEmail(lead), "customer", lead);
       lead.customerNotify = CONFIG.NOTIFY_SENT;
       lead.customerNotifyAt = formatTimestamp(now);
       result.customer = CONFIG.NOTIFY_SENT;
@@ -409,64 +546,115 @@ function deliverNotifications(lead, mailer, now = new Date()) {
       lead.notifyError = "customer_send_failed";
       result.customer = CONFIG.NOTIFY_FAILED;
       result.failed.push("customer");
+      if (claims) claims.release(lead.id, "customer");
     }
+  } else {
+    result.customer = customerStatus;
   }
 
-  if (shouldSendNotification(lead.businessNotify)) {
+  if (wantBusiness && !businessRecipient) {
+    lead.businessNotify = CONFIG.NOTIFY_FAILED;
+    lead.notifyError = lead.notifyError
+      ? `${lead.notifyError},invalid_business_recipient`
+      : "invalid_business_recipient";
+    result.business = CONFIG.NOTIFY_FAILED;
+    result.failed.push("business");
+  } else if (businessClaimed) {
     try {
-      mailer.send(buildBusinessEmail(lead));
+      sendValidatedEmail(mailer, buildBusinessEmail(lead), "business", lead);
       lead.businessNotify = CONFIG.NOTIFY_SENT;
       lead.businessNotifyAt = formatTimestamp(now);
       result.business = CONFIG.NOTIFY_SENT;
       result.sent.push("business");
-    } catch {
+    } catch (err) {
+      const code =
+        err &&
+        (err.message === "invalid_business_recipient" || err.message === "blocked_business_recipient")
+          ? "invalid_business_recipient"
+          : "business_send_failed";
       lead.businessNotify = CONFIG.NOTIFY_FAILED;
-      lead.notifyError = lead.notifyError ? `${lead.notifyError},business_send_failed` : "business_send_failed";
+      lead.notifyError = lead.notifyError ? `${lead.notifyError},${code}` : code;
       result.business = CONFIG.NOTIFY_FAILED;
       result.failed.push("business");
+      if (claims) claims.release(lead.id, "business");
     }
+  } else {
+    result.business = lead.businessNotify;
   }
 
   return result;
 }
 
-function confirmSavedEnquiry(store, event, mailer, now, todayISO) {
-  const saved = saveEnquiry(store, event, now, todayISO);
-  if (saved.status !== "ok") return saved;
-  if (saved.duplicate) {
-    saved.notificationsSent = false;
-    return saved;
-  }
-  const lead = store.rows.find((row) => row && row.id === saved.id);
+function confirmSavedEnquiry(store, event, mailer, now, todayISO, options = {}) {
+  const lock = options.lock;
+  if (lock && !lock.tryLock()) return { status: "error", error: "busy" };
   try {
-    saved.delivery = deliverNotifications(lead, mailer, now);
-  } catch {
-    if (lead.customerNotify === CONFIG.NOTIFY_PENDING) lead.customerNotify = CONFIG.NOTIFY_FAILED;
-    if (lead.businessNotify === CONFIG.NOTIFY_PENDING) lead.businessNotify = CONFIG.NOTIFY_FAILED;
-    lead.notifyError = "send_failed";
-    saved.delivery = { failed: ["exception"] };
+    const saved = saveEnquiry(store, event, now, todayISO);
+    if (saved.status !== "ok") return saved;
+    if (saved.duplicate) {
+      saved.notificationsSent = false;
+      return saved;
+    }
+    const lead = store.rows.find((row) => row && row.id === saved.id);
+    try {
+      saved.delivery = deliverNotifications(lead, mailer, now, { claims: options.claims });
+    } catch {
+      if (lead.customerNotify === CONFIG.NOTIFY_PENDING) lead.customerNotify = CONFIG.NOTIFY_FAILED;
+      if (lead.businessNotify === CONFIG.NOTIFY_PENDING) lead.businessNotify = CONFIG.NOTIFY_FAILED;
+      lead.notifyError = "send_failed";
+      saved.delivery = { failed: ["exception"] };
+    }
+    return {
+      status: "ok",
+      id: saved.id,
+      duplicate: false,
+      saved: true,
+      customerNotify: lead.customerNotify,
+      businessNotify: lead.businessNotify,
+    };
+  } finally {
+    if (lock) lock.releaseLock();
   }
-  return {
-    status: "ok",
-    id: saved.id,
-    duplicate: false,
-    saved: true,
-    customerNotify: lead.customerNotify,
-    businessNotify: lead.businessNotify,
-  };
 }
 
-function retryFailedNotifications(store, mailer, now = new Date()) {
-  const retried = [];
-  for (const lead of store.rows) {
-    if (!lead || !lead.id) continue;
-    const needsRetry =
-      lead.customerNotify === CONFIG.NOTIFY_FAILED || lead.businessNotify === CONFIG.NOTIFY_FAILED;
-    if (!needsRetry) continue;
-    deliverNotifications(lead, mailer, now);
-    retried.push(lead.id);
+function retryFailedNotifications(store, mailer, now = new Date(), options = {}) {
+  const lock = options.lock;
+  if (lock && !lock.tryLock()) return { status: "busy", retried: [] };
+  try {
+    const retried = [];
+    for (const lead of store.rows) {
+      if (!lead || !lead.id) continue;
+      const needsRetry =
+        lead.customerNotify === CONFIG.NOTIFY_FAILED || lead.businessNotify === CONFIG.NOTIFY_FAILED;
+      if (!needsRetry) continue;
+      deliverNotifications(lead, mailer, now, { claims: options.claims });
+      retried.push(lead.id);
+    }
+    return { retried, rowCount: store.rows.filter((row) => row && row.id).length };
+  } finally {
+    if (lock) lock.releaseLock();
   }
-  return { retried, rowCount: store.rows.filter((row) => row && row.id).length };
+}
+
+function processPendingNotifications(store, mailer, now = new Date(), options = {}) {
+  const lock = options.lock;
+  if (lock && !lock.tryLock()) return { status: "busy", processed: [] };
+  try {
+    const processed = [];
+    for (const lead of store.rows) {
+      if (!lead || !lead.id) continue;
+      const customer = String(lead.customerNotify || "");
+      const business = String(lead.businessNotify || "");
+      const failed = customer === CONFIG.NOTIFY_FAILED || business === CONFIG.NOTIFY_FAILED;
+      const pending = customer === CONFIG.NOTIFY_PENDING || business === CONFIG.NOTIFY_PENDING;
+      if (!failed && !pending) continue;
+      deliverNotifications(lead, mailer, now, { claims: options.claims });
+      processed.push(lead.id);
+    }
+    return { status: "ok", processed, rowCount: store.rows.filter((row) => row && row.id).length };
+  } finally {
+    if (lock) lock.releaseLock();
+  }
 }
 
 function numberOrZero(value) {
@@ -540,6 +728,14 @@ module.exports = {
   parseJourneyDetails,
   initialNotificationState,
   shouldSendNotification,
+  normalizeEmail,
+  isBlockedBusinessRecipient,
+  resolveBusinessRecipient,
+  resolveCustomerRecipient,
+  assertSafeOutgoingEmail,
+  sendValidatedEmail,
+  createClaimStore,
+  createNotificationLock,
   handleEnquiry,
   saveEnquiry,
   buildCustomerEmail,
@@ -547,6 +743,7 @@ module.exports = {
   deliverNotifications,
   confirmSavedEnquiry,
   retryFailedNotifications,
+  processPendingNotifications,
   summariseLeads,
   preservedExistingHeaders,
   allHeaders,

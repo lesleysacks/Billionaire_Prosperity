@@ -9,6 +9,8 @@
  * After deploying, run setupLeadManagement() once from the
  * Billionaire Prosperity menu (or the editor). That adds columns,
  * the private Dashboard tab, validations, and retry triggers.
+ * Do not run it again only to change BUSINESS_EMAIL; the public
+ * /exec URL uses the deployed version, while triggers use saved code.
  *
  * Keep this logic aligned with tests/enquiry-sheet-logic.js.
  *
@@ -31,6 +33,8 @@ const CONFIG = {
   TIMEZONE: "Africa/Johannesburg",
   BUSINESS_NAME: "Billionaire Prosperity",
   BUSINESS_EMAIL: "andremoses100.am@gmail.com",
+  REQUIRED_BUSINESS_EMAIL: "andremoses100.am@gmail.com",
+  BLOCKED_BUSINESS_RECIPIENTS: ["lesleysacks1@gmail.com"],
   BUSINESS_PHONE: "079 023 5061",
   BUSINESS_PHONE_ALT: "062 133 8497",
   WHATSAPP_DISPLAY: "+27 79 023 5061",
@@ -47,6 +51,7 @@ const CONFIG = {
   MAX_ELAPSED_MS: 7 * 24 * 60 * 60 * 1000,
   DUPLICATE_WINDOW_MS: 2 * 60 * 1000,
   LOCK_MS: 15000,
+  NOTIFY_CLAIM_TTL_MS: 5 * 60 * 1000,
   ALLOWED_SERVICES: [
     "Airport Transfer",
     "Wine Tour",
@@ -140,6 +145,15 @@ function doPost(e) {
       return jsonOutput({ status: "error", error: "busy" });
     }
     saved = handleEnquiry(e);
+    // Keep the script lock through send so the 5-minute trigger cannot also
+    // claim the same Pending row before this execution writes Sent/Failed.
+    if (saved && saved.status === "ok" && saved.id && !saved.duplicate) {
+      try {
+        deliverNotificationsForId(saved.id);
+      } catch (notifyErr) {
+        logEvent("notify_failed", saved.id);
+      }
+    }
   } catch (err) {
     logEvent("server");
     return jsonOutput({ status: "error", error: "server" });
@@ -148,14 +162,6 @@ function doPost(e) {
       lock.releaseLock();
     } catch (releaseErr) {
       // Ignore unlock failures so the client still receives a response.
-    }
-  }
-
-  if (saved && saved.status === "ok" && saved.id && !saved.duplicate) {
-    try {
-      deliverNotificationsForId(saved.id);
-    } catch (notifyErr) {
-      logEvent("notify_failed", saved.id);
     }
   }
 
@@ -355,6 +361,104 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function normalizeEmail(value) {
+  return String(value == null ? "" : value)
+    .trim()
+    .toLowerCase();
+}
+
+function isBlockedBusinessRecipient(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return false;
+  const blocked = CONFIG.BLOCKED_BUSINESS_RECIPIENTS;
+  for (let i = 0; i < blocked.length; i++) {
+    if (normalizeEmail(blocked[i]) === normalized) return true;
+  }
+  return false;
+}
+
+function resolveBusinessRecipient() {
+  const configured = normalizeEmail(CONFIG.BUSINESS_EMAIL);
+  const required = normalizeEmail(CONFIG.REQUIRED_BUSINESS_EMAIL);
+  if (!configured || !required) return "";
+  if (configured !== required) return "";
+  if (isBlockedBusinessRecipient(configured) || isBlockedBusinessRecipient(required)) return "";
+  return required;
+}
+
+function resolveCustomerRecipient(lead) {
+  return normalizeEmail(lead && lead.email);
+}
+
+function hasCopyRecipients(message) {
+  if (!message) return false;
+  return Boolean(message.cc || message.bcc || message.CC || message.Bcc || message.BCC);
+}
+
+function assertSafeOutgoingEmail(message, kind, lead) {
+  if (!message || typeof message !== "object") {
+    throw new Error("invalid_message");
+  }
+  if (hasCopyRecipients(message)) {
+    throw new Error("copy_recipients_forbidden");
+  }
+  const to = normalizeEmail(message.to);
+  if (kind === "customer") {
+    const expected = resolveCustomerRecipient(lead);
+    if (!expected) throw new Error("missing_customer_recipient");
+    if (to !== expected) throw new Error("invalid_customer_recipient");
+    return to;
+  }
+  if (kind === "business") {
+    const expected = resolveBusinessRecipient();
+    if (!expected || to !== expected) throw new Error("invalid_business_recipient");
+    if (isBlockedBusinessRecipient(to)) throw new Error("blocked_business_recipient");
+    return to;
+  }
+  throw new Error("unknown_email_kind");
+}
+
+function sendValidatedEmail(mailer, message, kind, lead) {
+  const to = assertSafeOutgoingEmail(message, kind, lead);
+  mailer.send({
+    to: to,
+    subject: message.subject,
+    html: message.html,
+    name: CONFIG.BUSINESS_NAME,
+  });
+}
+
+function notificationClaimKey_(enquiryId, kind) {
+  return "notify_claim_" + enquiryId + "_" + kind;
+}
+
+function tryClaimNotification_(enquiryId, kind, now) {
+  if (!enquiryId || !kind) return false;
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const key = notificationClaimKey_(enquiryId, kind);
+    const existing = props.getProperty(key);
+    if (existing) {
+      const claimedAt = Number(existing);
+      if (isFinite(claimedAt) && now.getTime() - claimedAt < CONFIG.NOTIFY_CLAIM_TTL_MS) {
+        return false;
+      }
+    }
+    props.setProperty(key, String(now.getTime()));
+    return true;
+  } catch (err) {
+    return true;
+  }
+}
+
+function releaseNotificationClaim_(enquiryId, kind) {
+  try {
+    PropertiesService.getScriptProperties().deleteProperty(notificationClaimKey_(enquiryId, kind));
+  } catch (err) {
+    // Ignore claim cleanup failures.
+  }
+}
+
 function isSubmitTimingInvalid(startedAt, nowMs) {
   if (startedAt == null || startedAt === "") return false;
   const started = Number(startedAt);
@@ -544,6 +648,9 @@ function findRowByEnquiryId(sheet, enquiryId) {
 function defaultMailer() {
   return {
     send: function (message) {
+      if (hasCopyRecipients(message)) {
+        throw new Error("copy_recipients_forbidden");
+      }
       MailApp.sendEmail({
         to: message.to,
         subject: message.subject,
@@ -577,7 +684,7 @@ function buildCustomerEmail(lead) {
     ? '<p style="white-space:pre-wrap">' + escapeHtml(journey.notes) + "</p>"
     : "";
   return {
-    to: String(lead.email || "").trim(),
+    to: resolveCustomerRecipient(lead),
     subject: CONFIG.BUSINESS_NAME + " — we received enquiry " + lead.id,
     html:
       '<div style="font-family:Georgia,serif;background:#faf7f1;padding:24px;color:#141312">' +
@@ -635,7 +742,7 @@ function buildBusinessEmail(lead) {
     ? '<p style="white-space:pre-wrap">' + escapeHtml(journey.notes) + "</p>"
     : "<p>No extra message.</p>";
   return {
-    to: CONFIG.BUSINESS_EMAIL,
+    to: resolveBusinessRecipient(),
     subject: "New enquiry " + lead.id + " — " + lead.service,
     html:
       '<div style="font-family:Arial,sans-serif;background:#ffffff;padding:16px;color:#141312;max-width:640px">' +
@@ -672,38 +779,73 @@ function deliverNotificationsForRow(sheet, row, mailer, now) {
   const lead = readLeadRow(sheet, row);
   if (!String(lead.id || "").trim()) return { status: "error", error: "missing" };
 
-  const attempts = Number(lead.notifyAttempts || 0) + 1;
-  let customerStatus = String(lead.customerNotify || CONFIG.NOTIFY_PENDING);
+  let customerStatus = String(lead.customerNotify || "");
   let businessStatus = String(lead.businessNotify || CONFIG.NOTIFY_PENDING);
   let customerAt = lead.customerNotifyAt || "";
   let businessAt = lead.businessNotifyAt || "";
   let errorCode = "";
+  const hasCustomerEmail = Boolean(resolveCustomerRecipient(lead));
+
+  if (!customerStatus) customerStatus = initialNotificationState(lead.email).customer;
+  if (!hasCustomerEmail) customerStatus = CONFIG.NOTIFY_SKIPPED;
+
+  const wantCustomer = hasCustomerEmail && shouldSendNotification(customerStatus);
+  const wantBusiness = shouldSendNotification(businessStatus);
+  const businessRecipient = resolveBusinessRecipient();
+  const customerClaimed = wantCustomer && tryClaimNotification_(lead.id, "customer", now);
+  const businessClaimed = wantBusiness && Boolean(businessRecipient) && tryClaimNotification_(lead.id, "business", now);
+
+  if (!wantCustomer && !wantBusiness) {
+    if (!hasCustomerEmail && String(lead.customerNotify || "") !== CONFIG.NOTIFY_SKIPPED) {
+      writeNotificationState(sheet, row, {
+        customer: CONFIG.NOTIFY_SKIPPED,
+        business: businessStatus,
+        customerAt: customerAt,
+        businessAt: businessAt,
+        attempts: lead.notifyAttempts || 0,
+        error: lead.notifyError || "",
+      });
+      SpreadsheetApp.flush();
+    }
+    return { status: "ok", customer: customerStatus, business: businessStatus };
+  }
+
+  if (wantCustomer && !customerClaimed && (!wantBusiness || !businessClaimed)) {
+    return { status: "busy", customer: customerStatus, business: businessStatus };
+  }
 
   sendWhatsAppNotification();
 
-  if (!customerStatus) customerStatus = initialNotificationState(lead.email).customer;
-  if (customerStatus === CONFIG.NOTIFY_SKIPPED || !String(lead.email || "").trim()) {
-    customerStatus = CONFIG.NOTIFY_SKIPPED;
-  } else if (shouldSendNotification(customerStatus)) {
+  if (customerClaimed) {
     try {
-      mailer.send(buildCustomerEmail(lead));
+      sendValidatedEmail(mailer, buildCustomerEmail(lead), "customer", lead);
       customerStatus = CONFIG.NOTIFY_SENT;
       customerAt = formatTimestamp(now);
     } catch (err) {
       customerStatus = CONFIG.NOTIFY_FAILED;
       errorCode = "customer_send_failed";
+      releaseNotificationClaim_(lead.id, "customer");
       logEvent("customer_email_failed", lead.id);
     }
   }
 
-  if (shouldSendNotification(businessStatus)) {
+  if (wantBusiness && !businessRecipient) {
+    businessStatus = CONFIG.NOTIFY_FAILED;
+    errorCode = errorCode ? errorCode + ",invalid_business_recipient" : "invalid_business_recipient";
+    logEvent("business_email_blocked", lead.id);
+  } else if (businessClaimed) {
     try {
-      mailer.send(buildBusinessEmail(lead));
+      sendValidatedEmail(mailer, buildBusinessEmail(lead), "business", lead);
       businessStatus = CONFIG.NOTIFY_SENT;
       businessAt = formatTimestamp(now);
     } catch (err) {
+      const code =
+        err && (err.message === "invalid_business_recipient" || err.message === "blocked_business_recipient")
+          ? "invalid_business_recipient"
+          : "business_send_failed";
       businessStatus = CONFIG.NOTIFY_FAILED;
-      errorCode = errorCode ? errorCode + ",business_send_failed" : "business_send_failed";
+      errorCode = errorCode ? errorCode + "," + code : code;
+      releaseNotificationClaim_(lead.id, "business");
       logEvent("business_email_failed", lead.id);
     }
   }
@@ -713,7 +855,7 @@ function deliverNotificationsForRow(sheet, row, mailer, now) {
     business: businessStatus,
     customerAt: customerAt,
     businessAt: businessAt,
-    attempts: attempts,
+    attempts: Number(lead.notifyAttempts || 0) + 1,
     error: errorCode,
   });
   SpreadsheetApp.flush();
