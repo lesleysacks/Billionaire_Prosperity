@@ -59,7 +59,86 @@ Save images at the paths shown on each placeholder. The page swaps the placehold
 
 The form checks name, phone, service, email format, a future travel date, and a whole-number passenger count (1–50) in the browser and again in Apps Script. On submit it POSTs to the Apps Script web app, which writes a row to the `Enquiries` tab of [Billionaire Prosperity - Enquiry Register](https://docs.google.com/spreadsheets/d/1F2hVNrAnCIa9PeO9e3bKT2e_LYNQ171Dvh0R2HTfL9E/edit). Success is shown only after the script returns JSON such as `{"status":"ok","id":"BP-0001"}`. If that confirmation is missing, the page offers WhatsApp, email, or copy instead. Availability is subject to confirmation. A request is not a confirmed booking. There is no booking engine and no payment processing.
 
-Pickup and destination are appended to **Customer Message**. No new sheet columns are required.
+Pickup and destination are appended to **Customer Message**. Historical columns A–N are unchanged. Lead-management columns start at **O**.
+
+### Email notifications
+
+After an enquiry row is saved, Apps Script sends email with `MailApp`:
+
+- **Customer confirmation** — only when a valid email was supplied. Includes the BP reference, service, travel date, passengers, pickup/destination, and a clear statement that the enquiry is **not** a confirmed booking.
+- **Business notification** — always attempted, to `andremoses100.am@gmail.com`. Includes the enquiry ID, contact details, journey fields, and a link to the sheet.
+
+The website response is the save result only (`{"status":"ok","id":"BP-####"}`). Email failure does not delete the row, does not change the enquiry ID, and does not show an error on the website.
+
+Notification state is stored on the enquiry row:
+
+| Status | Meaning |
+| --- | --- |
+| Pending | Saved, not yet sent |
+| Sent | MailApp accepted the message |
+| Failed | Send threw; retry from the menu |
+| Skipped | Customer email omitted because none was supplied |
+
+A 5-minute time trigger processes Pending and Failed rows. Duplicates within two minutes reuse the existing ID and do not send a second pair of emails.
+
+### New spreadsheet columns (appended after Notes)
+
+| Col | Header | Use |
+| --- | --- | --- |
+| O | Last Contact | Manual date of last owner contact |
+| P | Booking Value | Actual booking revenue (ZAR). Only **Booked** rows count as revenue |
+| Q | Customer Email Status | Pending / Sent / Failed / Skipped |
+| R | Business Email Status | Pending / Sent / Failed / Skipped |
+| S | Customer Email Sent At | South African timestamp |
+| T | Business Email Sent At | South African timestamp |
+| U | Notify Attempts | Retry count |
+| V | Notify Error | Generic error code only (no customer PII) |
+
+**Quoted Amount (M)** is a quote, not revenue. **Booking Value (P)** on status **Booked** is booking revenue.
+
+Status dropdown: New, Contacted, Quoted, Booked, Closed.
+
+### Private dashboard
+
+The **Dashboard** tab lives in the same Google Sheet. It is not a public website page. Share the spreadsheet only with authorised users.
+
+It counts rows that have a `BP-*` enquiry ID (placeholder Status=New rows without an ID are ignored) and uses live formulas for totals, conversion rate, quoted value, booking revenue, outstanding follow-ups, this month, and service breakdown.
+
+### Retry failed emails
+
+In the spreadsheet: **Billionaire Prosperity → Retry failed email notifications**. That resends Failed customer/business emails only. It does not create a new enquiry ID.
+
+### WhatsApp — click-to-chat now, official API later
+
+The website still uses `https://wa.me/27790235061`. Nothing claims that an automated WhatsApp message was sent. Do not automate WhatsApp Web.
+
+To add official WhatsApp later, store credentials in **Apps Script → Project Settings → Script properties**, never in `js/main.js`:
+
+- `WHATSAPP_PROVIDER` — `meta` or `twilio`
+- `WHATSAPP_TOKEN` — access token (Meta Cloud API or Twilio)
+- `WHATSAPP_PHONE_NUMBER_ID` — Meta phone number ID, or Twilio WhatsApp sender
+- `WHATSAPP_TEMPLATE_CUSTOMER` — approved template name for customer confirmation
+- `WHATSAPP_TEMPLATE_BUSINESS` — optional owner alert template
+
+Business setup: Meta Business Manager, a WhatsApp Business Account, a verified display name, and message templates approved for utility/confirmation use. Twilio requires a WhatsApp-enabled sender and content templates. `sendWhatsAppNotification()` in `Code.gs` is the extension point; it currently returns Skipped / not configured.
+
+### Deploy the Apps Script
+
+Paste and deploy **before** expecting emails, the menu, or dashboard refresh from Apps Script. This repository does not deploy the script automatically.
+
+1. Open the sheet → **Extensions → Apps Script**.
+2. Replace `Code.gs` with `google-apps-script/Code.gs` from this repository.
+3. Save.
+4. **Deploy → New deployment** (or **Manage deployments → Edit → New version**).
+   - Type: Web app
+   - Execute as: Me
+   - Who has access: Anyone
+5. Authorise **spreadsheet**, **gmail.send** / MailApp, and **script.scriptapp** (triggers) when Google prompts.
+6. If the `/exec` URL changes, update `SITE.formEndpoint` in `js/main.js`.
+7. Reload the sheet. Use **Billionaire Prosperity → Set up lead management** once (columns, dropdowns, ZAR format, Dashboard tab, retry trigger).
+8. Send one test enquiry from `contact.html` with your own email. Confirm the on-page `BP-####` ID, the row in the sheet, customer and business emails, and Dashboard totals. Availability is subject to confirmation. A request is not a confirmed booking.
+
+`doGet` is a health check only. It must not write rows. Keep the sheet / script timezone at `Africa/Johannesburg`.
 
 ### Confirmation strategy (do not use `no-cors`)
 
@@ -82,20 +161,4 @@ Apps Script runs `doPost`, then 302-redirects to `script.googleusercontent.com/m
 - Formula-like values (`=`, `+`, `-`, `@`) are quoted before they are written
 - Apps Script logs only event codes and enquiry IDs, not names, emails, phones, or messages
 
-### Deploy the Apps Script
-
-The live web app still needs this repo's `google-apps-script/Code.gs` pasted in and deployed. Until that happens, the current deployment can accept form fields and return JSON, but it appends after ~1,000 prefilled **Status = New** rows and treats JSON bodies as empty enquiries.
-
-1. Open the sheet → **Extensions → Apps Script**.
-2. Replace `Code.gs` with `google-apps-script/Code.gs` from this repository.
-3. Save.
-4. **Deploy → New deployment** (or **Manage deployments → Edit → New version**).
-   - Type: Web app
-   - Execute as: Me
-   - Who has access: Anyone
-5. Authorise the script if prompted (spreadsheet access).
-6. If the `/exec` URL changes, update `SITE.formEndpoint` in `js/main.js`.
-7. Send one test enquiry from `contact.html`, confirm a `BP-0001`-style ID on screen, and check that it landed in row 2 (the first blank Enquiry ID), not at row 1000.
-8. Optional: **Deploy → Test deployments** uses `/dev` and is only callable while you are signed in, so it is not a substitute for the `/exec` URL.
-
-`doGet` is a health check only. It must not write rows. Keep the sheet timezone / script timezone at `Africa/Johannesburg`. No column changes are required.
+The current `SITE.formEndpoint` already points at the deployed web app. Redeploy after pasting this `Code.gs` so email notifications and the lead-management menu go live.
