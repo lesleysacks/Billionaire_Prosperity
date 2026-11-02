@@ -175,8 +175,14 @@ test("local images and internal links resolve", () => {
   const brokenLinks = [];
   for (const page of pages) {
     const html = read(page);
-    for (const match of html.matchAll(/\ssrc="([^"]+)"/g)) {
-      const src = match[1];
+    const sources = [...html.matchAll(/\ssrc="([^"]+)"/g)].map((match) => match[1]);
+    for (const match of html.matchAll(/\ssrcset="([^"]+)"/g)) {
+      for (const part of match[1].split(",")) {
+        const src = part.trim().split(/\s+/)[0];
+        if (src) sources.push(src);
+      }
+    }
+    for (const src of sources) {
       if (/^(https?:|data:)/.test(src)) continue;
       const relative = decodeSrc(src);
       const file = path.join(root, relative);
@@ -221,7 +227,7 @@ test("Chery capacity stays unconfirmed and Suzuki cards keep 1–4", () => {
 
 test("enquiry surfaces say a request is not a confirmed booking", () => {
   const phrase = /Availability is subject to confirmation\. A request is not a confirmed booking\./;
-  for (const page of ["contact.html", "index.html", "services.html", "wine-tours.html", "fleet.html", "about.html"]) {
+  for (const page of ["contact.html", "index.html", "services.html", "wine-tours.html", "fleet.html", "about.html", "faq.html"]) {
     assert.match(read(page), phrase, page);
   }
   const script = read("js/main.js");
