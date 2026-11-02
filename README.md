@@ -4,16 +4,27 @@ Static marketing and enquiry website for https://billionaireprosperity.co.za (Gi
 
 ## Pages
 
-- `index.html` — Home
+- `index.html` — Home (canonical URL is `https://billionaireprosperity.co.za/`)
 - `services.html`
 - `wine-tours.html`
 - `fleet.html`
 - `about.html`
+- `faq.html` — questions about enquiries, services and travel confirmation
 - `gallery.html` — hidden for now: not linked from nav, footer or sitemap, and marked `noindex`. The file is kept. It may return later for customer reviews and satisfied-client photos, only with permission.
 - `contact.html` — enquiry form (posts to Google Apps Script / Google Sheets, with WhatsApp and email as a fallback)
 - `404.html`
 
-Shared files: `css/style.css`, `js/main.js`, `google-apps-script/Code.gs`, `assets/images/`, `favicon.svg`, `favicon.ico`, `robots.txt`, `sitemap.xml`.
+Shared files: `css/style.css`, `js/main.js`, `google-apps-script/Code.gs`, `assets/images/`, `assets/fonts/` (self-hosted Inter and Cormorant Garamond), `favicon.svg`, `favicon.ico`, `robots.txt`, `sitemap.xml`.
+
+## Search engines
+
+Indexable pages have unique titles, meta descriptions, canonical URLs, Open Graph tags and JSON-LD (`Organization`, `WebSite`, `WebPage`, `Service`, `BreadcrumbList`, and `FAQPage` on `faq.html`). `robots.txt` allows crawling. `sitemap.xml` lists the public pages and points at the homepage `/`, not `index.html`. Gallery and the 404 page are `noindex`. Do not add `noindex` to the rest of the site.
+
+Social shares use `assets/images/hero/og-default.jpg` (1200×630). The organisation logo in structured data is `assets/images/brand/logo.png`.
+
+Google Analytics, Google Search Console and Google Business Profile are not embedded in the HTML. Set those up in the Google accounts for this domain; do not invent tracking IDs.
+
+The SEO audit, keyword map, Lighthouse lab scores, Search Console checklist and 90-day plan are in `docs/SEO-REPORT.md`.
 
 ## Client details still to confirm
 
@@ -47,13 +58,14 @@ Save images at the paths shown on each placeholder. The page swaps the placehold
 
 | Path | Used on |
 | --- | --- |
-| `assets/images/hero/hero-transport.jpg` | Home hero |
-| `assets/images/hero/og-default.jpg` | Social share image (1200×630), then add the `og:image` tags |
+| `assets/images/hero/index_image.jpg` (plus `-800` / `-1400` srcset) | Home hero |
+| `assets/images/hero/og-default.jpg` | Social share image (1200×630) |
+| `assets/images/brand/logo.png` | Apple touch icon and Organisation schema logo |
 | `assets/images/services/*.jpg` | Service cards and the services page |
 | `assets/images/fleet/*.jpg` | Fleet |
-| `assets/images/wine-tours/*.jpg` | Wine tours (`stellenbosch.jpg`, `paarl.jpg`, `cape-town-tour-map.jpg` still needed) |
+| `assets/images/wine-tours/*.jpg` | Wine tours (`cape-town-tour-map.jpg` still needed) |
 | `assets/images/about/*.jpg` | About |
-| `assets/images/gallery/gallery-01.jpg` … `gallery-09.jpg` | Gallery |
+| `assets/images/gallery/gallery-01.jpg` … `gallery-09.jpg` | Gallery (page is `noindex` until photos are ready) |
 
 ## Contact form
 
